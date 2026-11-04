@@ -71,7 +71,16 @@ class Store:
         try:
             with open(tmp, "w", encoding="utf-8") as fh:
                 json.dump(obj, fh, indent=2, sort_keys=True)
-            os.replace(tmp, target)
+            # Windows refuses to replace a file another process holds open (WinError 5);
+            # readers hold it for milliseconds, so retry for up to a second before giving up.
+            for attempt in range(20):
+                try:
+                    os.replace(tmp, target)
+                    break
+                except PermissionError:
+                    if attempt == 19:
+                        raise
+                    time.sleep(0.05)
         finally:
             try:
                 os.unlink(tmp)
