@@ -1475,7 +1475,16 @@ def test_claude_code_failure_payloads_parse_with_their_exit_code():
     assert "cannot access" in text
     _, _, _, code = HOSTS["claude"]().tool_call(dict(CLAUDE_FAILURE, tool_name="Read",
                                                      error="File does not exist."))
-    assert code is None
+    assert code == 1
+    # A PostToolUse call succeeded: only a shell's output is left for the markers to judge.
+    ok = {"hook_event_name": "PostToolUse", "tool_input": {}}
+    edit = dict(ok, tool_name="Edit", tool_response={"filePath": "a.lua",
+                                                     "originalFile": "error('Error: x')"})
+    assert HOSTS["claude"]().tool_call(edit)[3] == 0
+    assert HOSTS["claude"]().tool_call(dict(ok, tool_name="mcp__Roblox_Studio__get_console_output",
+                                            tool_response="Asset load failed due to: x"))[3] == 0
+    assert HOSTS["claude"]().tool_call(dict(ok, tool_name="Bash",
+                                            tool_response={"stdout": "1 failed"}))[3] is None
 
 
 def test_the_claude_hook_file_registers_failed_calls():

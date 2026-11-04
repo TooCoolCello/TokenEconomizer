@@ -269,6 +269,22 @@ class ClaudeCode(Host):
     def turn_key(self, p):
         return str(p.get("prompt_id") or "")
 
+    _SHELLS = ("bash", "powershell")
+
+    def tool_call(self, p):
+        # Claude Code reports every failed call on PostToolUseFailure (2.1.299), so a call that
+        # reaches PostToolUse succeeded. Only a shell's output is still read for failure markers
+        # (`cmd | tail` exits 0 whatever cmd did). Any other tool's output is content, not an
+        # outcome: an Edit's response is the whole file, and a console-reading MCP tool repeats
+        # the same old warning on every read -- both were folded as failures and woke the judge.
+        name, args, text, code = super().tool_call(p)
+        if code is None:
+            if p.get("hook_event_name") == "PostToolUseFailure":
+                code = 1
+            elif name.lower() not in self._SHELLS:
+                code = 0
+        return name, args, text, code
+
     def env_session_id(self, env):
         # Claude Code exports its session id to the Bash tool's shell (seen on 2.1.304).
         return str(env.get("TE_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID") or "")
